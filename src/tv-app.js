@@ -14,32 +14,34 @@ export class TvApp extends LitElement {
     this.activeContent = ""; 
     this.itemClick = this.itemClick.bind(this); 
     this.time = ""; 
+    this.farthestIndex = 0; 
   }
 
-  // LitElement life cycle for when the element is added to the DOM
+
   connectedCallback() {
-    super.connectedCallback(); // helps in setting up the initial state of the component
+    super.connectedCallback(); 
+    this.loadInfo();
+    this.contentLoader();
   }
 
   static get tag() {
     return "tv-app";
   }
 
-  // LitElement convention so we update render() when values change
   static get properties() {
     return {
       name: { type: String },
-      source: { type: String }, // To fetch the JSON file
+      source: { type: String }, 
       listings: { type: Array },
       selectedCourse: { type: Object },
       contents: { type: Array },
       id: { type: String },
       activeIndex: { type: Number },
       activeContent: { type: String },
-      //time: { type: String },
+      time: { type: String },
     };
   }
-  // LitElement convention for applying styles JUST to our element
+  
   static get styles() {
     return [
       css`
@@ -88,7 +90,7 @@ export class TvApp extends LitElement {
           background: #f8f9fa;
         }
 
-        .fabs {
+        .clickers {
           display: flex;
           flex-direction: row;
           justify-content: space-between;
@@ -99,7 +101,7 @@ export class TvApp extends LitElement {
           width: 81vw;
         }
 
-        #previous > button {
+        #back > button {
           border-radius: 4px;
           font-family:
             Google Sans,
@@ -152,6 +154,8 @@ export class TvApp extends LitElement {
   }
 
   render() {
+    const theFirstPage = this.activeIndex === 0;
+    const theLastPage = this.activeIndex === this.listings.length - 1;
     return html`
       <top-bar time="${this.time}"> </top-bar>
       <div class="alignContent">
@@ -170,19 +174,53 @@ export class TvApp extends LitElement {
         </div>
 
         <div class="main">
-          <slot> ${this.activeContent} </slot>
+           <slot></slot>
         </div>
 
-        <div class="fabs">
-          <div id="previous">
+        <div class="clickers">
+          <div id="back" style="$theFirstPage ? 'display: none;' : ''}">
             <button @click=${() => this.prevPage()}>Back</button>
           </div>
-          <div id="next">
+          <div id="next" style="$theLastPage ? 'display: none;' : ''}">
             <button @click=${() => this.nextPage()}>Next</button>
           </div>
         </div>
       </div>
     `;
+  }
+
+  renderActiveContent(){
+    const slotElement = this.shadowRoot.querySelector('slot');
+
+    if(!this.activeContent){
+      slotElement.innerHTML = '';
+    }
+
+    slotElement.innerHTML = this.activeContent;
+
+  }
+
+  contentLoader(){
+    const currActiveIndex = localStorage.getItem('activeIndex');
+    const currFarthestIndex = localStorage.getItem('farthestIndex');
+    if (currActiveIndex !== null && currFarthestIndex !== null){
+      this.activeIndex = parseInt(storedActiveIndex, 10);
+      this.farthestIndex = parseInt(storedFarthestIndex, 10);
+      this.loadActiveContent();
+    }
+  }
+
+  async loadInfo(){
+
+    await fetch(this.source)
+      .then((resp) => (resp.ok ? resp.json() : []))
+      .then((responseData) => {
+        if (responseData.status === 200 && responseData.data.items && responseData.data.items.length > 0) {
+          this.listings = [...responseData.data.items];
+          this.loadActiveContent();
+        }
+      })
+      .catch((error) => { console.error('Error fetching data:', error); });
   }
 
   async nextPage() {
@@ -195,6 +233,7 @@ export class TvApp extends LitElement {
       try {
         const response = await fetch(contentPath);
         this.activeContent = await response.text();
+        this.renderActiveContent();
         this.activeIndex = nextIndex; 
       } catch (err) {
         console.log("fetch failed", err);
@@ -202,7 +241,6 @@ export class TvApp extends LitElement {
     }
   }
 
-  // function to fetch the previous content
   async prevPage() {
     if (this.activeIndex !== null) {
 
@@ -215,34 +253,35 @@ export class TvApp extends LitElement {
       try {
         const response = await fetch(contentPath);
         this.activeContent = await response.text();
-        //console.log("Active Content", this.activeContent);
-        this.activeIndex = prevIndex; // Update the active index after fetching content
+        this.renderActiveContent();
+        
+        this.activeIndex = prevIndex; 
       } catch (err) {
         console.log("fetch failed", err);
       }
     }
   }
 
-  // Funtion to fetch for the content that is being clicked
   async itemClick(index) {
     this.activeIndex = index; 
-    //console.log("Active Index: ", this.activeIndex);
+    
 
     const item = this.listings[index].location; 
-    //console.log("Active Content: ", item);
+    
 
     this.time = this.listings[index].metadata.timecode; 
-    //console.log("Time: ", this.time);
+    
 
     const contentPath = "/assets/" + item;
 
     
     try {
       const response = await fetch(contentPath);
-      // console.log("Response: ", response);
+     
       const text = await response.text();
-      // console.log("Text: ", text);
+     
       this.activeContent = text; 
+      this.renderActiveContent();
     } catch (err) {
       console.log("fetch failed", err);
     }
